@@ -1,0 +1,9 @@
+name: sweep-annotations
+on:
+  push:
+    branches: ['sweep/annotations']
+jobs:
+  annotate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::warning file=README.md,line=1,title=connector sweep::an annotation made for the list_check_annotations check"

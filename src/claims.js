@@ -7,4 +7,10 @@ function parseAmountToCents(input) {
   return Math.round(Number(cleaned) * 100);
 }
 
-module.exports = { parseAmountToCents };
+/** Says whether a claim id is valid: "CLM-" followed by exactly five digits. Returns false for anything that is not a string. */
+function isValidClaimId(input) {
+  if (typeof input !== 'string') return false;
+  return /^CLM-\d{5}$/.test(input);
+}
+
+module.exports = { parseAmountToCents, isValidClaimId };

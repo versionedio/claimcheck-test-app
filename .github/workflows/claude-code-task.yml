@@ -1,0 +1,73 @@
+# Runs Claude Code on a GitHub-hosted runner for one coding task, then pushes the work branch and opens a pull request.
+# The model, the endpoint and the key come from the AI provider your workspace selected (Tenant Settings → AI); the connector passes the
+# model and endpoint in as inputs and stores the key as the AI_PROVIDER_API_KEY repository secret.
+# Needs: that secret, and the repository setting that lets GitHub Actions create pull requests.
+# The connector's setup_workflow, setup_permissions and setup_secret actions add this file, the setting and the secret.
+# To change what runs, edit this file in your repository; the connector never overwrites a file that is already there.
+name: Claude Code task
+run-name: ${{ inputs.work_branch }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: What the agent should do
+        required: true
+      base_branch:
+        description: Branch to work from and open the pull request into
+        required: true
+      work_branch:
+        description: Branch the agent commits to
+        required: true
+      model:
+        description: The model to run, from your AI provider settings
+        required: true
+      base_url:
+        description: The provider's Anthropic-protocol endpoint; blank for Anthropic itself
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    env:
+      BASE_BRANCH: ${{ inputs.base_branch }}
+      WORK_BRANCH: ${{ inputs.work_branch }}
+      INPUT_MODEL: ${{ inputs.model }}
+      INPUT_BASE_URL: ${{ inputs.base_url }}
+      ANTHROPIC_AUTH_TOKEN: ${{ secrets.AI_PROVIDER_API_KEY }}
+      ENABLE_TOOL_SEARCH: 'false'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.base_branch }}
+          fetch-depth: 0
+      - name: Create the work branch
+        run: git checkout -b "$WORK_BRANCH"
+      - name: Point Claude Code at the selected provider and model
+        run: |
+          for v in ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL CLAUDE_CODE_SUBAGENT_MODEL; do
+            echo "$v=$INPUT_MODEL" >> "$GITHUB_ENV"
+          done
+          if [ -n "$INPUT_BASE_URL" ]; then echo "ANTHROPIC_BASE_URL=$INPUT_BASE_URL" >> "$GITHUB_ENV"; fi
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.AI_PROVIDER_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: ${{ inputs.prompt }}
+          claude_args: --max-turns 40 --allowedTools "Read,Glob,Grep,Edit,Write,Bash"
+      - name: Commit, push and open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "claude-code-task"
+          git config user.email "claude-code-task@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "The agent made no changes"; exit 0; fi
+          git commit -m "Claude Code: $WORK_BRANCH"
+          git push origin "HEAD:$WORK_BRANCH"
+          gh pr create --base "$BASE_BRANCH" --head "$WORK_BRANCH" --title "Claude Code: $WORK_BRANCH" --body "Task $WORK_BRANCH, done by Claude Code."

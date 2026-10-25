@@ -7,4 +7,9 @@ function parseAmountToCents(input) {
   return Math.round(Number(cleaned) * 100);
 }
 
-module.exports = { parseAmountToCents };
+/** Returns whether input is a claim id in the form "CLM-12345". */
+function isValidClaimId(input) {
+  return typeof input === 'string' && /^CLM-\d{5}$/.test(input);
+}
+
+module.exports = { parseAmountToCents, isValidClaimId };
